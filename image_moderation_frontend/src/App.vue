@@ -36,16 +36,33 @@ const uploadAndModerate = async () => {
   moderationResult.value = null;
 
   try {
-    const reader = new FileReader();
-    reader.readAsDataURL(selectedFile.value);
-    reader.onloadend = async () => {
-      const base64Image = (reader.result as string).split(',')[1]; // Get base64 string without data:image/jpeg;base64, prefix
+    const base64Image = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (reader.result) {
+          const resultString = reader.result as string;
+          const parts = resultString.split(',');
+          if (parts.length > 1) {
+            resolve(parts[1] || '');
+          } else {
+            reject(new Error("Invalid data URL format."));
+          }
+        } else {
+          reject(new Error("Failed to read file."));
+        }
+      };
+      reader.onerror = reject;
+      if (selectedFile.value) {
+        reader.readAsDataURL(selectedFile.value);
+      } else {
+        reject(new Error("No file selected."));
+      }
+    });
 
-      const response = await axios.post('http://localhost:5001/moderate_image', {
-        image: base64Image,
-      });
-      moderationResult.value = response.data.result;
-    };
+    const response = await axios.post('http://localhost:5001/moderate_image', {
+      image: base64Image,
+    });
+    moderationResult.value = response.data.result;
   } catch (err) {
     if (axios.isAxiosError(err)) {
       error.value = err.response?.data?.error || err.message;
@@ -65,7 +82,7 @@ const uploadAndModerate = async () => {
     <div class="upload-section">
       <input type="file" @change="handleFileChange" accept="image/*" />
       <button @click="uploadAndModerate" :disabled="!selectedFile || isLoading">
-        {{ isLoading ? '审核中...' : '上传并审核' }}
+        {{ isLoading ? '审核中...' : '审核' }}
       </button>
     </div>
 
